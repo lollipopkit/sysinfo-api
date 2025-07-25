@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  sysinfo-api:
+    build: .
+    container_name: sysinfo-api-server
+    ports:
+      - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
+    restart: unless-stopped
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-u", "${AUTH_USERNAME:-admin}:${AUTH_PASSWORD:-password123}", "http://localhost:${SERVER_PORT:-8080}/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    privileged: true
+    pid: "host"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host:ro
+    networks:
+      - sysinfo-network
+
+networks:
+  sysinfo-network:
+    driver: bridge

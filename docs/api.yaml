@@ -1,0 +1,529 @@
+openapi: 3.0.3
+info:
+  title: SysInfo API Server
+  description: High-performance system information monitoring API server
+  version: 0.1.0
+  contact:
+    name: API Support
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development server
+
+security:
+  - basicAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Check server health status
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            example: healthy
+                          timestamp:
+                            type: string
+                            format: date-time
+
+  /system:
+    get:
+      summary: Get all system information
+      description: Return complete system monitoring information
+      tags:
+        - System
+      responses:
+        '200':
+          description: Successfully retrieved system information
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SystemInfo'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /system/overview:
+    get:
+      summary: Get system overview
+      description: Return basic system information overview
+      tags:
+        - System
+      responses:
+        '200':
+          description: Successfully retrieved system overview
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SystemOverview'
+
+  /system/cpu:
+    get:
+      summary: Get CPU information
+      description: Return CPU usage and core information
+      tags:
+        - System
+      responses:
+        '200':
+          description: Successfully retrieved CPU information
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CpuInfo'
+
+  /system/memory:
+    get:
+      summary: Get memory information
+      description: Return memory and swap usage
+      tags:
+        - System
+      responses:
+        '200':
+          description: Successfully retrieved memory information
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/MemoryInfo'
+
+  /system/disks:
+    get:
+      summary: Get disk information
+      description: Return usage information for all disks
+      tags:
+        - System
+      responses:
+        '200':
+          description: Successfully retrieved disk information
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DiskInfo'
+
+  /system/networks:
+    get:
+      summary: Get network information
+      description: Return network interface statistics
+      tags:
+        - System
+      responses:
+        '200':
+          description: Successfully retrieved network information
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        additionalProperties:
+                          $ref: '#/components/schemas/NetworkInfo'
+
+  /system/processes:
+    get:
+      summary: Get process information
+      description: Return process statistics and rankings
+      tags:
+        - System
+      responses:
+        '200':
+          description: Successfully retrieved process information
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ProcessSummary'
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Basic authentication with username and password
+
+  responses:
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  code:
+                    example: 401
+                  msg:
+                    example: Unauthorized
+                  data:
+                    example: null
+
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  code:
+                    example: 429
+                  msg:
+                    example: Rate limit exceeded
+                  data:
+                    example: null
+
+  schemas:
+    ApiResponse:
+      type: object
+      required:
+        - code
+        - msg
+        - data
+      properties:
+        code:
+          type: integer
+          description: Response code (0 for success, non-zero for error)
+          example: 0
+        msg:
+          type: string
+          description: Response message
+          example: Success
+        data:
+          description: Response data (null if error occurred)
+          nullable: true
+
+    SystemInfo:
+      type: object
+      required:
+        - timestamp
+        - system
+        - cpu
+        - memory
+        - disks
+        - networks
+        - processes
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Information collection timestamp
+        system:
+          $ref: '#/components/schemas/SystemOverview'
+        cpu:
+          $ref: '#/components/schemas/CpuInfo'
+        memory:
+          $ref: '#/components/schemas/MemoryInfo'
+        disks:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiskInfo'
+        networks:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/NetworkInfo'
+        processes:
+          $ref: '#/components/schemas/ProcessSummary'
+
+    SystemOverview:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+          description: Operating system name
+          example: Darwin
+        kernel_version:
+          type: string
+          nullable: true
+          description: Kernel version
+          example: 23.1.0
+        os_version:
+          type: string
+          nullable: true
+          description: Operating system version
+          example: 14.1
+        host_name:
+          type: string
+          nullable: true
+          description: Host name
+          example: MacBook-Pro
+        uptime:
+          type: integer
+          format: int64
+          description: System uptime in seconds
+          example: 86400
+        boot_time:
+          type: integer
+          format: int64
+          description: System boot timestamp
+          example: 1705123456
+
+    CpuInfo:
+      type: object
+      required:
+        - global_usage
+        - cores
+      properties:
+        global_usage:
+          type: number
+          format: float
+          description: Overall CPU usage percentage
+          example: 15.5
+        cores:
+          type: array
+          items:
+            $ref: '#/components/schemas/CpuCore'
+        physical_core_count:
+          type: integer
+          nullable: true
+          description: Physical core count
+          example: 8
+
+    CpuCore:
+      type: object
+      required:
+        - name
+        - usage
+        - frequency
+      properties:
+        name:
+          type: string
+          description: CPU core name
+          example: cpu0
+        usage:
+          type: number
+          format: float
+          description: Core usage percentage
+          example: 12.3
+        frequency:
+          type: integer
+          format: int64
+          description: Core frequency in MHz
+          example: 2400
+
+    MemoryInfo:
+      type: object
+      required:
+        - total
+        - available
+        - used
+        - free
+        - swap_total
+        - swap_used
+        - swap_free
+      properties:
+        total:
+          type: integer
+          format: int64
+          description: Total memory in bytes
+          example: 17179869184
+        available:
+          type: integer
+          format: int64
+          description: Available memory in bytes
+          example: 8589934592
+        used:
+          type: integer
+          format: int64
+          description: Used memory in bytes
+          example: 8589934592
+        free:
+          type: integer
+          format: int64
+          description: Free memory in bytes
+          example: 4294967296
+        swap_total:
+          type: integer
+          format: int64
+          description: Total swap space in bytes
+          example: 2147483648
+        swap_used:
+          type: integer
+          format: int64
+          description: Used swap space in bytes
+          example: 0
+        swap_free:
+          type: integer
+          format: int64
+          description: Free swap space in bytes
+          example: 2147483648
+
+    DiskInfo:
+      type: object
+      required:
+        - name
+        - mount_point
+        - total_space
+        - available_space
+        - is_removable
+      properties:
+        name:
+          type: string
+          description: Disk device name
+          example: /dev/disk1s1
+        mount_point:
+          type: string
+          description: Mount point
+          example: /
+        total_space:
+          type: integer
+          format: int64
+          description: Total space in bytes
+          example: 494384795648
+        available_space:
+          type: integer
+          format: int64
+          description: Available space in bytes
+          example: 123456789012
+        is_removable:
+          type: boolean
+          description: Whether the disk is removable
+          example: false
+
+    NetworkInfo:
+      type: object
+      required:
+        - received
+        - transmitted
+        - packets_received
+        - packets_transmitted
+        - errors_on_received
+        - errors_on_transmitted
+      properties:
+        received:
+          type: integer
+          format: int64
+          description: Bytes received
+          example: 1234567890
+        transmitted:
+          type: integer
+          format: int64
+          description: Bytes transmitted
+          example: 987654321
+        packets_received:
+          type: integer
+          format: int64
+          description: Packets received
+          example: 123456
+        packets_transmitted:
+          type: integer
+          format: int64
+          description: Packets transmitted
+          example: 98765
+        errors_on_received:
+          type: integer
+          format: int64
+          description: Receive errors count
+          example: 0
+        errors_on_transmitted:
+          type: integer
+          format: int64
+          description: Transmit errors count
+          example: 0
+
+    ProcessSummary:
+      type: object
+      required:
+        - total_count
+        - top_cpu_processes
+        - top_memory_processes
+      properties:
+        total_count:
+          type: integer
+          description: Total process count
+          example: 245
+        top_cpu_processes:
+          type: array
+          description: Top 10 processes by CPU usage
+          items:
+            $ref: '#/components/schemas/ProcessInfo'
+        top_memory_processes:
+          type: array
+          description: Top 10 processes by memory usage
+          items:
+            $ref: '#/components/schemas/ProcessInfo'
+
+    ProcessInfo:
+      type: object
+      required:
+        - pid
+        - name
+        - cpu_usage
+        - memory
+      properties:
+        pid:
+          type: integer
+          format: int32
+          description: Process ID
+          example: 1234
+        name:
+          type: string
+          description: Process name
+          example: chrome
+        cpu_usage:
+          type: number
+          format: float
+          description: CPU usage percentage
+          example: 25.5
+        memory:
+          type: integer
+          format: int64
+          description: Memory usage in bytes
+          example: 1073741824
+
+tags:
+  - name: Health
+    description: Health check related endpoints
+  - name: System
+    description: System information monitoring endpoints
