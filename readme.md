@@ -2,7 +2,7 @@
 
 **English** | [中文](readme-zh.md)
 
-A high-performance system information monitoring API server built with Rust using the ntex framework and sysinfo library.
+A high-performance system information monitoring API server built with Rust using the axum framework and sysinfo library.
 
 ## Quick Start
 
@@ -24,19 +24,19 @@ cargo run --release
 
 For details, please refer to the [OpenAPI Documentation](docs/api.yaml).
 
-## Usage Examples
-
-```bash
-# Health check
-curl -u admin:password123 http://localhost:8080/api/v1/health
-```
-
 ## Default Configuration
 
 - Port: 8080
 - Username: admin
 - Password: password123
 - Rate Limit: 60 requests per minute
+
+## Usage Examples
+
+```bash
+# Health check
+curl -u admin:password123 http://localhost:8080/api/v1/health
+```
 
 ## License
 
