@@ -6,6 +6,7 @@ services:
     container_name: sysinfo-api-server
     ports:
       - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
+      - "${MCP_PORT:-8081}:${MCP_PORT:-8081}"
     restart: unless-stopped
     environment:
       - RUST_LOG=${RUST_LOG:-info}

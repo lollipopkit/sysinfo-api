@@ -10,9 +10,9 @@ macro_rules! json_resp_ok {
 #[macro_export]
 macro_rules! json_resp_err {
     ($code:expr, $msg:expr) => {
-        Json(Resp::error($code, $msg.to_string()))
+        Json(Resp::error($code, $msg))
     };
     ($code:expr) => {
-        Json(Resp::error($code, "Internal server error".to_string()))
+        Json(Resp::error($code, "Internal server error"))
     };
 }

@@ -4,16 +4,26 @@ use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 use tower_http::trace::TraceLayer;
+use hyper_util::{
+    rt::{TokioExecutor, TokioIo},
+    server::conn::auto::Builder,
+    service::TowerToHyperService,
+};
+use rmcp::{ServiceExt, transport::{stdio, streamable_http_server::{StreamableHttpService, session::local::LocalSessionManager}}};
+use tracing_subscriber::{self, EnvFilter};
 
 mod api;
 mod cfg;
 mod macros;
+mod mcp;
 mod middlewares;
 mod models;
 mod service;
 
 use api::Resp;
 use service::AppState;
+use mcp::SysInfoMcp;
+use cfg::McpMode;
 
 #[derive(Clone)]
 struct AuthState {
@@ -72,22 +82,97 @@ async fn health_check() -> Json<Resp<serde_json::Value>> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
-    env_logger::init();
+    
+    // Initialize tracing subscriber
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()))
+        .with_writer(std::io::stderr)
+        .init();
 
     let config = cfg::Config::from_env();
     let app_state = Arc::new(AppState::new());
 
+    match config.mcp_mode {
+        McpMode::Stdio => {
+            run_mcp_stdio(app_state).await
+        }
+        McpMode::Http => {
+            run_mcp_http(app_state, config).await
+        }
+        McpMode::Both => {
+            let config_clone = config.clone();
+            let (rest_result, mcp_result) = tokio::try_join!(
+                tokio::spawn(run_rest_server(app_state.clone(), config.clone())),
+                tokio::spawn(run_mcp_http(app_state, config_clone)),
+            )?;
+            rest_result?;
+            mcp_result?;
+            Ok(())
+        }
+        McpMode::RestOnly => {
+            run_rest_server(app_state, config).await
+        }
+    }
+}
+
+async fn run_mcp_stdio(app_state: Arc<AppState>) -> anyhow::Result<()> {
+    tracing::info!("Starting MCP server in stdio mode");
+    
+    let service = SysInfoMcp::new(app_state)
+        .serve(stdio())
+        .await
+        .inspect_err(|e| {
+            tracing::error!("MCP stdio serving error: {:?}", e);
+        })?;
+
+    service.waiting().await?;
+    Ok(())
+}
+
+async fn run_mcp_http(app_state: Arc<AppState>, config: cfg::Config) -> anyhow::Result<()> {
+    tracing::info!("Starting MCP server in HTTP mode on port {}", config.mcp_port);
+    
+    let service = TowerToHyperService::new(StreamableHttpService::new(
+        {
+            let app_state = app_state.clone();
+            move || Ok(SysInfoMcp::new(app_state.clone()))
+        },
+        LocalSessionManager::default().into(),
+        Default::default(),
+    ));
+
+    let mcp_addr = format!("{}:{}", config.server_host, config.mcp_port);
+    let listener = tokio::net::TcpListener::bind(&mcp_addr).await?;
+    
+    loop {
+        let io = tokio::select! {
+            _ = tokio::signal::ctrl_c() => break,
+            accept = listener.accept() => {
+                TokioIo::new(accept?.0)
+            }
+        };
+        let service = service.clone();
+        tokio::spawn(async move {
+            let _result = Builder::new(TokioExecutor::default())
+                .serve_connection(io, service)
+                .await;
+        });
+    }
+    Ok(())
+}
+
+async fn run_rest_server(app_state: Arc<AppState>, config: cfg::Config) -> anyhow::Result<()> {
     // Pre-compute auth credentials for performance
     let auth_state = AuthState {
         expected_credentials: format!("{}:{}", config.username, config.password),
     };
 
-    log::info!(
-        "Starting server on http://{}:{}",
+    tracing::info!(
+        "Starting REST API server on http://{}:{}",
         config.server_host,
         config.server_port
     );
-    log::info!(
+    tracing::info!(
         "Using username: {}, password: {}",
         config.username,
         config.password
